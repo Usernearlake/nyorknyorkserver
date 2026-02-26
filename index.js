@@ -5,7 +5,7 @@ const https = require('https');
 const http = require('http');
 
 // ========== CONFIGURATION ==========
-const MASTER_SERVER = process.env.MASTER_SERVER || 'https://server-ku8h.onrender.com';
+const MASTER_SERVER = process.env.MASTER_SERVER || 'https://nyorknyorkserver.onrender.com';
 const PORT = process.env.PORT || process.env.SERVER_PORT || 5552;
 const MAX_REGISTRATION_ATTEMPTS = 5;
 const BOT_TIMEOUT = 30000;
@@ -608,3 +608,4 @@ startBot().catch(error => {
   console.error(color('Failed to start bot:', colors.red), error);
   process.exit(1);
 });
+
