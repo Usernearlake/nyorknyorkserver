@@ -1,0 +1,118 @@
+name: Ubuntu VPS with Tailscale
+on:
+  workflow_dispatch:
+jobs:
+  vps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Ubuntu
+        run: |
+          echo "🚀 Starting Ubuntu VPS..."
+          sudo apt-get update
+          sudo apt-get install -y curl wget git vim nano htop tmux python3 python3-pip openssh-server net-tools iputils-ping neofetch
+
+      - name: Free Up Memory
+        run: |
+          echo "🧹 Freeing up memory..."
+          sudo apt-get autoremove -y
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          sudo sync && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
+          free -h
+          df -h
+          echo "✅ Memory freed!"
+
+      - name: Optimize Network (Speed Boost)
+        run: |
+          echo "⚡ Applying network optimizations..."
+          sudo sysctl -w net.core.rmem_max=134217728
+          sudo sysctl -w net.core.wmem_max=134217728
+          sudo sysctl -w net.ipv4.tcp_rmem="4096 87380 134217728"
+          sudo sysctl -w net.ipv4.tcp_wmem="4096 65536 134217728"
+          sudo sysctl -w net.core.netdev_max_backlog=250000
+          sudo sysctl -w net.ipv4.tcp_window_scaling=1
+          sudo sysctl -w net.ipv4.tcp_congestion_control=bbr
+          sudo sysctl -w net.core.default_qdisc=fq
+          sudo sysctl -w net.ipv4.tcp_fastopen=3
+          echo "✅ Network optimized!"
+
+      - name: Install Node.js
+        run: |
+          echo "📦 Installing Node.js..."
+          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+          echo "✅ Node.js installed!"
+          node -v
+          npm -v
+
+      - name: Install Python Packages
+        run: |
+          echo "🐍 Installing Python aiohttp..."
+          pip3 install aiohttp --break-system-packages || pip3 install aiohttp
+          echo "✅ Python packages installed!"
+
+      - name: Clone & Setup flood_of-noah
+        run: |
+          echo "📥 Cloning flood_of-noah..."
+          git clone https://github.com/benbenido025-lab/flood_of-noah
+          cd flood_of-noah
+          echo "📦 Installing npm dependencies..."
+          npm install
+          npm install hpack set-cookie-parser
+          echo "✅ Dependencies installed!"
+          echo "📋 Package list:"
+          npm list --depth=0
+      
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up --authkey tskey-auth-kiczyMxmPm11CNTRL-wWZxz1Ng2hJyqrmgHAq7iJomN6hz2je9F --hostname="github-vps"
+          sleep 5
+          IP=$(tailscale ip -4)
+          echo "TAILSCALE_IP=$IP" >> $GITHUB_ENV
+          echo "✅ Connected to Tailscale! IP: $IP"
+      
+      - name: Setup SSH
+        run: |
+          echo "runner:ubuntuvps123" | sudo chpasswd
+          sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo systemctl restart ssh
+
+      - name: Display Connection Info
+        run: |
+          echo "══════════════════════════════════════════"
+          echo "✅ VPS READY! CONNECT VIA TAILSCALE"
+          echo "══════════════════════════════════════════"
+          echo "🔑 SSH: ssh runner@${{ env.TAILSCALE_IP }}"
+          echo "🔐 PASSWORD: ubuntuvps123"
+          echo "🌐 TAILSCALE IP: ${{ env.TAILSCALE_IP }}"
+          neofetch
+          echo "📦 INSTALLED: neofetch | hpack | set-cookie-parser | aiohttp"
+          echo "══════════════════════════════════════════"
+
+      - name: Run flood_of-noah
+        run: |
+          echo "🚀 Starting flood_of-noah..."
+          cd flood_of-noah
+          node index.js &
+          echo "✅ node index.js running in background!"
+      
+      - name: Keep Alive
+        run: |
+          echo "🔄 VPS is running for 6 hours..."
+          sudo sync && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
+          COUNT=0
+          while true; do
+            echo "[$(date)] Heartbeat #$COUNT - VPS alive on ${{ env.TAILSCALE_IP }}"
+            if (( COUNT % 6 == 0 )); then
+              sudo sync && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
+              echo "[$(date)] 🧹 Cache cleared - Memory: $(free -h | awk '/^Mem:/{print $3 "/" $2}')"
+            fi
+            COUNT=$((COUNT + 1))
+            sleep 300
+          done
