@@ -58,7 +58,9 @@ async function installDependencies() {
     'express-rate-limit',
     'https-proxy-agent',
     'socks-proxy-agent',
-    'colors'
+    'colors',
+    'hpack',
+    'set-cookie-parser'
   ];
 
   console.log(color('\n🔍 Checking dependencies...', colors.cyan));
@@ -608,4 +610,5 @@ startBot().catch(error => {
   console.error(color('Failed to start bot:', colors.red), error);
   process.exit(1);
 });
+
 
